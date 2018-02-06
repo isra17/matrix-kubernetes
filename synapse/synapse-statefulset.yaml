@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: synapse-run
+data:
+  template.log.config: |
+    version: 1
+    formatters:
+      precise:
+       format: '%(asctime)s - %(name)s - %(lineno)d - %(levelname)s - %(request)s- %(message)s'
+    filters:
+      context:
+        (): synapse.util.logcontext.LoggingContextFilter
+        request: ""
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: precise
+        filters: [context]
+    loggers:
+        synapse:
+            level: INFO
+        synapse.storage.SQL:
+            level: INFO
+    root:
+        level: INFO
+        handlers: [console]
+  run.sh: |
+    if [ ! -f /data/homeserver.yaml ]; then
+      /start.sh generate
+      ln -sf /scripts/template.log.config /data/$SERVER_NAME.log.config
+    fi
+    echo 'Starting version: ' $(/start.sh version)
+    /start.sh start
+---
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: matrix
+spec:
+  serviceName: synapse
+  template:
+    metadata:
+      labels:
+        app: synapse
+    spec:
+      containers:
+        - name: synapse
+          image: avhost/docker-matrix
+          command: ["sh"]
+          args: ["/scripts/run.sh"]
+          ports:
+            - containerPort: 8008
+              name: http
+            - containerPort: 8448
+              name: federation
+          envFrom:
+            - configMapRef:
+                name: matrix-env
+          volumeMounts:
+            - name: synapse-data
+              mountPath: /data
+            - name: synapse-run
+              mountPath: /scripts
+            - name: nfs-data
+              mountPath: /data/homeserver.yaml
+              subPath: homeserver.yaml
+            - name: nfs-data
+              mountPath: /nfs
+          resources:
+            limits:
+              cpu: 500m
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 1Gi
+      volumes:
+        - name: synapse-run
+          configMap:
+            name: synapse-run
+        - name: synapse-data
+          gcePersistentDisk:
+            pdName: matrix-data-pd
+            fsType: ext4
+        - name: nfs-data
+          nfs:
+            server: 10.31.246.107
+            path: "/"
+

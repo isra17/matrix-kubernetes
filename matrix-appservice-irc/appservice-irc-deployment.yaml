@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix-appservice-irc
+spec:
+  selector:
+    app: matrix-appservice-irc
+  ports:
+  - name: http
+    port: 9999
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: irc-run
+data:
+  run.sh: |
+    if [ ! -f /data/irc-registration.yaml ]; then
+      /start.sh -r -f /data/irc-registration.yaml -u 'http://matrix-appservice-irc:9999' \
+        -c /data/config.yaml -l ircbot
+    fi
+    /start.sh -c /data/config.yaml -f /data/irc-registration.yaml -p 9999
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: matrix-appservice-irc
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: matrix-appservice-irc
+    spec:
+      containers:
+      - name: proxy-matrix-federation
+        image: tedomum/matrix-appservice-irc
+        command: ["sh"]
+        args: ["/scripts/run.sh"]
+        ports:
+        - name: service
+          containerPort: 9999
+        volumeMounts:
+          - name: nfs-data
+            mountPath: /data
+          - name: irc-run
+            mountPath: /scripts
+      volumes:
+        - name: irc-run
+          configMap:
+            name: irc-run
+        - name: nfs-data
+          nfs:
+            server: 10.31.246.107
+            path: "/irc/"
+
