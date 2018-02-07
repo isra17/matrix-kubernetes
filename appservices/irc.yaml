@@ -33,7 +33,7 @@ spec:
         app: matrix-appservice-irc
     spec:
       containers:
-      - name: proxy-matrix-federation
+      - name: matrix-appservice-irc
         image: tedomum/matrix-appservice-irc
         command: ["sh"]
         args: ["/scripts/run.sh"]
