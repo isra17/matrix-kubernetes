@@ -23,7 +23,7 @@ data:
         synapse.storage.SQL:
             level: INFO
     root:
-        level: INFO
+        level: WARN
         handlers: [console]
   run.sh: |
     if [ ! -f /data/homeserver.yaml ]; then

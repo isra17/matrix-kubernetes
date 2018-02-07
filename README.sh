@@ -37,6 +37,8 @@ sudo cp irc-config.yaml /tmp/nfs/irc/config.yaml
 sudo umount /tmp/nfs
 kill %1
 
+## Create postgresql database
+
 ## Create Synapse deployment
 
 # Update config file:
@@ -87,6 +89,7 @@ gcloud compute disks create nfs-data-pd --size 1 --zone $ZONE --type pd-standard
 
 ## Install Bridges
 
+kubectl create secret generic matrix_creds --from-literal="MATRIX_LOCALPART=$MATRIX_LOCALPART" --from-literal="MATRIX_PASSWORD=$MATRIX_PASSWORD"
 kubectl create -f appservices/ --cluster $CLUSTER
 
 ## Register User

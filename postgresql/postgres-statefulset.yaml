@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-init
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+      CREATE DATABASE synapse
+       ENCODING 'UTF8'
+       LC_COLLATE='C'
+       LC_CTYPE='C'
+       template=template0
+       OWNER matrix;
+    EOSQL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-rs
+spec:
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  clusterIP: None
+  selector:
+    app: postgresql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    app: postgresql
+---
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: postgresql
+spec:
+  serviceName: postgresql
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - image: postgres:latest
+        name: postgresql
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        livenessProbe:
+          exec:
+            command: ['sh', '-c', 'exec pg_isready --host $POD_IP']
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command: ['sh', '-c', 'exec pg_isready --host $POD_IP']
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+        env:
+        - name: POSTGRES_PASSWORD
+          value: matrix
+        - name: POSTGRES_USER
+          value: matrix
+        - name: PGPASSWORD
+          value: matrix
+        - name: PGUSER
+          value: matrix
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POD_IP
+          valueFrom: { fieldRef: { fieldPath: status.podIP } }
+        volumeMounts:
+        - name: postgresql-data
+          mountPath: /var/lib/postgresql/data/
+        - name: postgresql-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          limits:
+            cpu: 500m
+            memory: 2Gi
+          requests:
+            cpu: 10m
+            memory: 512Mi
+      volumes:
+      - name: postgresql-data
+        gcePersistentDisk:
+          pdName: postgresql-pd
+          fsType: ext4
+      - name: postgresql-init
+        configMap:
+          name: postgresql-init
+          defaultMode: 0777
